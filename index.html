@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Gestión MP 2026 — HHHA</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  html, body { height: 100%; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  .scroll-shadow { box-shadow: inset 0 -1px 0 rgba(0,0,0,0.05); }
+  /* Sticky table cells */
+  .tbl-wrap { position: relative; overflow: auto; }
+  .tbl { border-collapse: separate; border-spacing: 0; }
+  .tbl th, .tbl td { border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 4px 8px; font-size: 12px; white-space: nowrap; background: white; }
+  .tbl thead th { position: sticky; top: 0; z-index: 3; background: #f1f5f9; font-weight: 600; }
+  .tbl thead tr.row2 th { top: 28px; }
+  .tbl tbody tr:hover td { background: #f8fafc; cursor: pointer; }
+  .tbl tbody tr.empty-slot td { background: #f1f5f9; color: #64748b; font-style: italic; }
+  .tbl th.sticky-col, .tbl td.sticky-col { position: sticky; left: 0; z-index: 2; background: white; }
+  .tbl thead th.sticky-col { z-index: 5; background: #f1f5f9; }
+  .tbl tbody tr:hover td.sticky-col { background: #f8fafc; }
+  .tbl tbody tr.empty-slot td.sticky-col { background: #f1f5f9; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-weight: 600; font-size: 11px; }
+  .b-x { background: #dbeafe; color: #1d4ed8; }
+  .b-r { background: #ffedd5; color: #c2410c; }
+  .b-ra { background: #ede9fe; color: #6d28d9; }
+  .b-pm { background: #ccfbf1; color: #0f766e; }
+  .b-si { background: #dcfce7; color: #15803d; }
+  .b-c { background: #fee2e2; color: #b91c1c; }
+  .b-fs { background: #fef9c3; color: #a16207; }
+  .b-baja { background: #e5e7eb; color: #374151; }
+  .b-nu { background: #fce7f3; color: #be185d; }
+  /* Modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(15,23,42,0.55); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .modal { background: white; border-radius: 8px; max-width: 1100px; width: 100%; max-height: 92vh; overflow: auto; }
+  .modal-sm { max-width: 560px; }
+  details > summary { cursor: pointer; list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] > summary .chev { transform: rotate(90deg); }
+  .chev { transition: transform 0.15s; }
+  [data-lucide] { width: 16px; height: 16px; display: inline-block; vertical-align: -3px; }
+  .icon-lg [data-lucide] { width: 20px; height: 20px; }
+  .sidebar-btn { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 6px; color: #cbd5e1; font-size: 14px; cursor: pointer; transition: background 0.15s; }
+  .sidebar-btn:hover { background: #1e293b; color: white; }
+  .sidebar-btn.active { background: #2563eb; color: white; }
+  .input { width: 100%; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; background: white; }
+  .input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+  .btn { padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; }
+  .btn-primary { background: #2563eb; color: white; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-secondary { background: white; color: #334155; border-color: #cbd5e1; }
+  .btn-secondary:hover { background: #f1f5f9; }
+  .btn-danger { background: #dc2626; color: white; }
+  .btn-success { background: #16a34a; color: white; }
+  .pill { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+  .toast { position: fixed; bottom: 20px; right: 20px; z-index: 100; max-width: 360px; }
+  .toast > div { background: #0f172a; color: white; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .toast .ok { background: #15803d; }
+  .toast .err { background: #b91c1c; }
+  /* Virtualization spacer */
+  .v-spacer { width: 1px; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800">
+
+<div class="flex h-screen overflow-hidden">
+  <!-- Sidebar -->
+  <aside class="w-60 bg-slate-900 text-white flex flex-col flex-shrink-0">
+    <div class="px-5 py-4 border-b border-slate-700">
+      <div class="text-sm font-semibold leading-tight">Programa MP 2026</div>
+      <div class="text-xs text-slate-400 mt-0.5">HHHA · Biomédica</div>
+    </div>
+    <nav class="flex-1 p-3 space-y-1">
+      <div class="sidebar-btn active" data-view="pmp"><i data-lucide="calendar-days"></i> Programación PMP</div>
+      <div class="sidebar-btn" data-view="registro"><i data-lucide="clipboard-list"></i> Registro de resultados</div>
+      <div class="sidebar-btn" data-view="pendientes"><i data-lucide="alert-circle"></i> Pendientes</div>
+      <div class="sidebar-btn" data-view="verificacion"><i data-lucide="bar-chart-3"></i> Verificación de carga</div>
+    </nav>
+    <div class="p-3 text-xs text-slate-400 border-t border-slate-700">
+      v1.0 · datos locales
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="flex-1 flex flex-col min-w-0">
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 px-5 py-3 flex items-center gap-3 flex-shrink-0">
+      <h1 id="view-title" class="text-base font-semibold text-slate-800 mr-auto">Programación PMP</h1>
+      <div id="counter" class="text-xs text-slate-500 mr-2"></div>
+      <input type="file" id="file-input" accept=".xlsm,.xlsx,.xls" class="hidden" />
+      <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
+        <i data-lucide="upload"></i> Cargar archivo maestro
+      </button>
+      <button class="btn btn-secondary" onclick="exportJSON()">
+        <i data-lucide="download"></i> Exportar JSON
+      </button>
+      <input type="file" id="json-input" accept=".json" class="hidden" />
+      <button class="btn btn-secondary" onclick="document.getElementById('json-input').click()">
+        <i data-lucide="upload-cloud"></i> Importar JSON
+      </button>
+    </header>
+
+    <!-- Content -->
+    <main id="content" class="flex-1 overflow-auto bg-slate-50">
+      <!-- No data state -->
+      <div id="no-data" class="h-full flex items-center justify-center">
+        <div class="text-center max-w-md">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-4 icon-lg">
+            <i data-lucide="file-spreadsheet"></i>
+          </div>
+          <h2 class="text-lg font-semibold text-slate-800 mb-2">Cargue el archivo maestro</h2>
+          <p class="text-sm text-slate-600 mb-4">Seleccione el archivo Excel <code class="text-xs bg-slate-200 px-1 rounded">Programacion_MP_2026.xlsm</code> con las hojas <b>PMP_2026</b> y <b>Registro_MP-2026</b>.</p>
+          <p class="text-xs text-slate-500">Los eventos y pendientes registrados se conservan en el navegador (localStorage). El archivo Excel se carga en memoria en cada sesión.</p>
+        </div>
+      </div>
+      <!-- Views injected here -->
+      <div id="view-pmp" class="hidden h-full flex flex-col"></div>
+      <div id="view-registro" class="hidden h-full flex flex-col"></div>
+      <div id="view-pendientes" class="hidden h-full flex flex-col"></div>
+      <div id="view-verificacion" class="hidden h-full p-6 overflow-auto"></div>
+    </main>
+  </div>
+</div>
+
+<!-- Modals container -->
+<div id="modals"></div>
+<div id="toasts" class="toast"></div>
+
+<script>
+/* ============================================================
+   DATOS DE REFERENCIA
+   ============================================================ */
+const MONTHS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const MONTHS_FULL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const CAUSAS = {
+  C1: 'Imposibilidad de desocupar el equipo del paciente por indicación clínica',
+  C2: 'Equipo en servicio técnico',
+  C3: 'Equipo no operativo, a la espera de repuestos o accesorios',
+  C4: 'Equipo en préstamo a otro hospital o institución',
+  C5: 'No disponibilidad de horas hombre del funcionario SEC por alta carga laboral',
+  C6: 'No disponibilidad de horas hombre del servicio técnico externo',
+  C7: 'Ausencia justificada del funcionario SEC superior a 15 días',
+  C8: 'Contingencia hospitalaria'
+};
+const EJECUTORES = [
+  'Carlos Bahamondes Seguel','Cristián Beltrán Oviedo','Cristina Rozas Urrutia',
+  'Daniel Díaz Neira','Ignacio Berner Bergara','Macarena Toledo','Marco Ulloa',
+  'Matías Soazo Garrido','Personal externo','Ricardo Matus Aroca','Tito Millapán Riquelme'
+];
+const RESULTADOS = ['Si','C1','C2','C3','C4','C5','C6','C7','C8','FS','Baja','NU'];
+const TIPOS_EVENTO = {
+  mp:         { label: 'Mantención preventiva',     icon: 'wrench',         color: 'blue' },
+  envio:      { label: 'Envío a servicio técnico',  icon: 'send',           color: 'orange' },
+  solicitud:  { label: 'Solicitud de trabajo',      icon: 'file-text',      color: 'purple' },
+  recepcion:  { label: 'Recepción',                 icon: 'package-check',  color: 'green' },
+  reparacion: { label: 'Reparación',                icon: 'hammer',         color: 'red' }
+};
+
+/* ============================================================
+   ESTADO GLOBAL
+   ============================================================ */
+const STORAGE_KEY = 'mp_app_state_v1';
+const state = {
+  equipos: [],          // [{ key, id, fam, carpeta, inv, equipo, servicio, unidad, ubicacion, procedencia, marca, modelo, serie, anio, vur, clas, enuBaja, frecuencia, pmpMeses:[12], regProg:[12], regRes:[12], obs, empty:bool }]
+  loaded: false,
+  fileName: '',
+  verif: null,
+  // Persisted
+  eventos: {},          // { key: [eventos...] }
+  pendientes: {}        // { key: [pendientes...] }
+};
+
+function loadPersisted(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw){
+      const j = JSON.parse(raw);
+      state.eventos = j.eventos || {};
+      state.pendientes = j.pendientes || {};
+    }
+  } catch(e){ console.warn('No se pudo cargar localStorage:', e); }
+}
+function savePersisted(){
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ eventos: state.eventos, pendientes: state.pendientes }));
+  } catch(e){ toast('Error guardando datos: '+e.message,'err'); }
+}
+
+/* ============================================================
+   UTILIDADES
+   ============================================================ */
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function toast(msg, kind='ok'){
+  const wrap = document.getElementById('toasts');
+  const div = document.createElement('div');
+  div.className = kind;
+  div.textContent = msg;
+  wrap.appendChild(div);
+  setTimeout(()=>div.remove(), 4000);
+}
+function fmtDateInput(d){ // yyyy-mm-dd -> dd-mm-yyyy display
+  if (!d) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  if (!m) return d;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function escapeHtml(s){ if (s==null) return ''; return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function val(v){ return v==null || v==='' ? '—' : escapeHtml(v); }
+
+/* ============================================================
+   CARGA DEL ARCHIVO XLSM
+   ============================================================ */
+document.getElementById('file-input').addEventListener('change', async (e)=>{
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const buf = await f.arrayBuffer();
+    const wb = XLSX.read(buf, { type:'array' });
+    const need = ['PMP_2026','Registro_MP-2026'];
+    for (const n of need){
+      if (!wb.SheetNames.includes(n)){
+        toast(`Falta hoja "${n}" en el archivo`,'err'); return;
+      }
+    }
+    parseWorkbook(wb);
+    state.loaded = true;
+    state.fileName = f.name;
+    document.getElementById('no-data').classList.add('hidden');
+    document.getElementById('counter').textContent = `${state.equipos.filter(x=>!x.empty).length} equipos · ${state.equipos.length} filas · ${f.name}`;
+    // Mostrar vista de verificación por defecto al cargar
+    selectView('verificacion');
+    toast('Archivo cargado correctamente');
+  } catch(err){
+    console.error(err);
+    toast('Error al leer archivo: '+err.message,'err');
+  } finally {
+    e.target.value = '';
+  }
+});
+
+function parseWorkbook(wb){
+  const pmp = XLSX.utils.sheet_to_json(wb.Sheets['PMP_2026'], { header:1, defval:null });
+  const reg = XLSX.utils.sheet_to_json(wb.Sheets['Registro_MP-2026'], { header:1, defval:null });
+  // PMP: encabezados fila 7 (idx 6), datos desde fila 8 (idx 7)
+  // Columnas (0-indexed): 0=A=Familia, 1=B=ID, 2=C=Carpeta, 3=D=Inv, 4=E=Equipo, 5=F=Servicio, 6=G=Unidad, 7=H=Ubic, 8=I=Proc, 9=J=Marca, 10=K=Modelo, 11=L=Serie, 12=M=Año, 13=N=VUR, 14=O=Clas, 15=P=ENU/Baja, 16=Q=Obs (IGNORE), 17=R=Frecuencia, 18=S=Responsable (IGNORE)
+  // Meses: 19=T=Ene .. 30=AE=Dic
+  const equiposMap = new Map();
+  const dups = [];
+  const partial = [];
+
+  let pmpRows = 0;
+  for (let i = 7; i < pmp.length; i++){
+    const r = pmp[i] || [];
+    const id = r[1];
+    if (id == null || id === '') continue;
+    pmpRows++;
+    const inv = r[3] != null && String(r[3]).trim() ? String(r[3]).trim() : null;
+    const key = inv && inv !== 'N/A' ? `inv:${inv}` : `id:${id}`;
+    const equipo = r[4];
+    const empty = equipo == null || (typeof equipo === 'string' && equipo.trim() === '');
+    const months = [];
+    for (let m=0; m<12; m++){
+      const v = r[19+m];
+      months.push(v == null || v === '' ? null : String(v).trim());
+    }
+    const obj = {
+      key,
+      rowIndex: i,
+      fam: r[0] || '',
+      id: id,
+      carpeta: r[2],
+      inv: inv,
+      equipo: equipo,
+      servicio: r[5],
+      unidad: r[6],
+      ubicacion: r[7],
+      procedencia: r[8],
+      marca: r[9],
+      modelo: r[10],
+      serie: r[11],
+      anio: r[12],
+      vur: r[13],
+      clas: r[14],
+      enuBaja: r[15],
+      frecuencia: r[17],
+      pmpMeses: months,
+      regProg: Array(12).fill(null),
+      regRes:  Array(12).fill(null),
+      regObs: null,
+      empty
+    };
+    if (empty) partial.push({ id, key, motivo:'Slot sin equipo asignado' });
+    if (equiposMap.has(key)){
+      dups.push(key);
+    } else {
+      equiposMap.set(key, obj);
+    }
+  }
+
+  // Registro: B..S idénticos. Desde T cada mes ocupa 2 cols (P,R). Col 44 (idx 43) = AR Observación
+  let regRows = 0;
+  for (let i = 7; i < reg.length; i++){
+    const r = reg[i] || [];
+    const id = r[1];
+    if (id == null || id === '') continue;
+    regRows++;
+    const inv = r[3] != null && String(r[3]).trim() ? String(r[3]).trim() : null;
+    const key = inv && inv !== 'N/A' ? `inv:${inv}` : `id:${id}`;
+    const target = equiposMap.get(key);
+    if (!target) continue;
+    for (let m=0; m<12; m++){
+      const p = r[19 + m*2];
+      const rs = r[19 + m*2 + 1];
+      target.regProg[m] = (p==null||p==='') ? null : String(p).trim();
+      target.regRes[m]  = (rs==null||rs==='') ? null : String(rs).trim();
+    }
+    if (r[43] != null && String(r[43]).trim()) target.regObs = String(r[43]).trim();
+  }
+
+  state.equipos = Array.from(equiposMap.values());
+
+  // Verificación: conteos
+  const codeCounts = {};                  // code -> [12]
+  const resCounts  = {};
+  state.equipos.forEach(e=>{
+    e.pmpMeses.forEach((v,m)=>{
+      if (!v) return;
+      if (!codeCounts[v]) codeCounts[v] = Array(12).fill(0);
+      codeCounts[v][m]++;
+    });
+    e.regRes.forEach((v,m)=>{
+      if (!v) return;
+      if (!resCounts[v]) resCounts[v] = Array(12).fill(0);
+      resCounts[v][m]++;
+    });
+  });
+  const familias = {};
+  state.equipos.forEach(e=>{
+    const f = (e.fam || '(sin familia)').toString().trim() || '(sin familia)';
+    familias[f] = (familias[f] || 0) + 1;
+  });
+  state.verif = {
+    pmpRows, regRows,
+    validos: state.equipos.filter(e=>!e.empty).length,
+    slots:   state.equipos.filter(e=> e.empty).length,
+    familias, codeCounts, resCounts,
+    duplicados: [...new Set(dups)],
+    parciales: partial
+  };
+}
+
+/* ============================================================
+   NAVEGACIÓN ENTRE VISTAS
+   ============================================================ */
+const VIEWS = ['pmp','registro','pendientes','verificacion'];
+const TITLES = { pmp:'Programación PMP', registro:'Registro de resultados', pendientes:'Pendientes', verificacion:'Verificación de carga' };
+function selectView(v){
+  if (!state.loaded){ toast('Cargue primero el archivo maestro','err'); return; }
+  document.getElementById('no-data').classList.add('hidden');
+  VIEWS.forEach(x=>{
+    const el = document.getElementById('view-'+x);
+    el.classList.toggle('hidden', x !== v);
+  });
+  document.querySelectorAll('.sidebar-btn').forEach(b=> b.classList.toggle('active', b.dataset.view === v));
+  document.getElementById('view-title').textContent = TITLES[v];
+  if      (v==='pmp')          renderPMP();
+  else if (v==='registro')     renderRegistro();
+  else if (v==='pendientes')   renderPendientes();
+  else if (v==='verificacion') renderVerificacion();
+  lucide.createIcons();
+}
+document.querySelectorAll('.sidebar-btn').forEach(b=> b.addEventListener('click', ()=> selectView(b.dataset.view)));
+
+/* ============================================================
+   FILTROS Y BÚSQUEDA COMUNES
+   ============================================================ */
+function uniqueValues(field){
+  const set = new Set();
+  state.equipos.forEach(e=>{ const v = e[field]; if (v != null && v !== '') set.add(String(v)); });
+  return [...set].sort((a,b)=>a.localeCompare(b,'es'));
+}
+function buildFilterBar(view, current, onChange){
+  const servicios = uniqueValues('servicio');
+  const familias  = uniqueValues('equipo');
+  const clasifs   = uniqueValues('clas');
+  const frecs     = uniqueValues('frecuencia');
+  const html = `
+    <div class="bg-white border-b border-slate-200 px-4 py-3 flex flex-wrap gap-2 items-center flex-shrink-0">
+      <div class="relative flex-1 min-w-[220px] max-w-md">
+        <i data-lucide="search" class="absolute left-2 top-2.5 text-slate-400"></i>
+        <input id="f-q-${view}" class="input pl-8" placeholder="Buscar por inventario, serie, equipo, marca, modelo..." value="${escapeHtml(current.q||'')}" />
+      </div>
+      <select id="f-serv-${view}" class="input w-auto"><option value="">Todos los servicios</option>${servicios.map(s=>`<option ${current.servicio===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select>
+      <select id="f-fam-${view}" class="input w-auto"><option value="">Todas las familias</option>${familias.map(s=>`<option ${current.equipo===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select>
+      <select id="f-clas-${view}" class="input w-auto"><option value="">Toda clasificación</option>${clasifs.map(s=>`<option ${current.clas===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select>
+      <select id="f-frec-${view}" class="input w-auto"><option value="">Toda frecuencia</option>${frecs.map(s=>`<option ${current.frecuencia===s?'selected':''}>${escapeHtml(s)}</option>`).join('')}</select>
+      <button class="btn btn-secondary" id="f-clear-${view}"><i data-lucide="x"></i> Limpiar</button>
+      <div class="ml-auto text-xs text-slate-500" id="f-count-${view}"></div>
+    </div>`;
+  setTimeout(()=>{
+    const bind = (id, field) => {
+      const el = document.getElementById(`f-${id}-${view}`);
+      el.addEventListener('input', ()=>{ current[field] = el.value; onChange(); });
+      el.addEventListener('change', ()=>{ current[field] = el.value; onChange(); });
+    };
+    bind('q','q'); bind('serv','servicio'); bind('fam','equipo'); bind('clas','clas'); bind('frec','frecuencia');
+    document.getElementById(`f-clear-${view}`).addEventListener('click', ()=>{
+      Object.keys(current).forEach(k=> current[k]='');
+      onChange(); render(); // re-render filter bar to clear inputs
+      function render(){
+        if (view==='pmp') renderPMP(); else if (view==='registro') renderRegistro();
+      }
+    });
+    lucide.createIcons();
+  }, 0);
+  return html;
+}
+function applyFilter(arr, f){
+  const q = (f.q||'').toLowerCase().trim();
+  return arr.filter(e=>{
+    if (f.servicio && String(e.servicio||'') !== f.servicio) return false;
+    if (f.equipo   && String(e.equipo  ||'') !== f.equipo)   return false;
+    if (f.clas     && String(e.clas    ||'') !== f.clas)     return false;
+    if (f.frecuencia && String(e.frecuencia||'') !== f.frecuencia) return false;
+    if (q){
+      const hay = [e.inv, e.serie, e.equipo, e.marca, e.modelo, e.servicio, e.unidad, e.ubicacion]
+        .map(x=> (x==null?'':String(x).toLowerCase())).join(' | ');
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+/* ============================================================
+   VIRTUALIZACIÓN SIMPLE
+   ============================================================ */
+function virtualTable(containerId, opts){
+  // opts: { rows, rowHeight, renderRow(row,index)->tr-html, headHtml, colCount, prefixCols (number of sticky cols at start) }
+  const cont = document.getElementById(containerId);
+  const rowH = opts.rowHeight;
+  const total = opts.rows.length;
+  cont.innerHTML = `
+    <table class="tbl" style="min-width:100%;">
+      ${opts.headHtml}
+      <tbody id="${containerId}-body"></tbody>
+    </table>`;
+  const body = document.getElementById(containerId+'-body');
+  // total height spacer via single-cell rows of total height: we'll use padding on tbody via two spacer rows
+  let topSpacer, bottomSpacer;
+  function build(){
+    body.innerHTML = '';
+    topSpacer = document.createElement('tr'); topSpacer.style.height = '0px'; topSpacer.innerHTML = `<td colspan="${opts.colCount}" style="padding:0;border:0;background:transparent;"></td>`;
+    bottomSpacer = document.createElement('tr'); bottomSpacer.style.height = `${total * rowH}px`; bottomSpacer.innerHTML = `<td colspan="${opts.colCount}" style="padding:0;border:0;background:transparent;"></td>`;
+    body.appendChild(topSpacer); body.appendChild(bottomSpacer);
+    render();
+  }
+  let rendered = { start: -1, end: -1 };
+  function render(){
+    const scTop = cont.scrollTop;
+    const vh = cont.clientHeight;
+    const buf = 5;
+    const start = Math.max(0, Math.floor(scTop / rowH) - buf);
+    const end   = Math.min(total, Math.ceil((scTop+vh)/rowH) + buf);
+    if (start === rendered.start && end === rendered.end) return;
+    // clear all between spacers
+    while (topSpacer.nextSibling && topSpacer.nextSibling !== bottomSpacer){
+      body.removeChild(topSpacer.nextSibling);
+    }
+    topSpacer.style.height = `${start * rowH}px`;
+    bottomSpacer.style.height = `${Math.max(0, (total - end)) * rowH}px`;
+    const frag = document.createDocumentFragment();
+    for (let i = start; i < end; i++){
+      const tr = document.createElement('tr');
+      tr.style.height = rowH+'px';
+      tr.innerHTML = opts.renderRow(opts.rows[i], i);
+      if (opts.rows[i].empty) tr.classList.add('empty-slot');
+      tr.addEventListener('click', ()=> opts.onRowClick && opts.onRowClick(opts.rows[i]));
+      frag.appendChild(tr);
+    }
+    body.insertBefore(frag, bottomSpacer);
+    rendered = { start, end };
+  }
+  cont.onscroll = render;
+  build();
+  return { rebuild: build };
+}
+
+/* ============================================================
+   VISTA: PROGRAMACIÓN PMP
+   ============================================================ */
+const pmpFilters = { q:'', servicio:'', equipo:'', clas:'', frecuencia:'' };
+function renderPMP(){
+  const root = document.getElementById('view-pmp');
+  root.innerHTML = buildFilterBar('pmp', pmpFilters, ()=>updatePMP()) + `
+    <div id="pmp-table" class="tbl-wrap flex-1"></div>`;
+  setTimeout(()=> updatePMP(), 0);
+  lucide.createIcons();
+}
+function pmpHead(){
+  // sticky cols: ID, Inv, Equipo
+  return `<thead>
+    <tr>
+      <th class="sticky-col" style="left:0;min-width:50px;">ID</th>
+      <th class="sticky-col" style="left:50px;min-width:100px;">Inv.</th>
+      <th class="sticky-col" style="left:150px;min-width:150px;">Equipo</th>
+      <th>Familia</th><th>Carpeta</th><th>Servicio</th><th>Unidad</th><th>Ubicación</th>
+      <th>Procedencia</th><th>Marca</th><th>Modelo</th><th>Serie</th>
+      <th>Año</th><th>VUR</th><th>Clasif.</th><th>ENU/Baja</th><th>Frecuencia</th>
+      ${MONTHS.map(m=>`<th style="min-width:42px;text-align:center;">${m}</th>`).join('')}
+    </tr></thead>`;
+}
+function codeBadge(c){
+  if (!c) return '';
+  const cls = c==='X'?'b-x':c==='R'?'b-r':c==='RA'?'b-ra':c==='PM'?'b-pm':'b-baja';
+  return `<span class="badge ${cls}">${escapeHtml(c)}</span>`;
+}
+function updatePMP(){
+  const filt = applyFilter(state.equipos, pmpFilters);
+  document.getElementById('f-count-pmp').textContent = `${filt.length} filas`;
+  virtualTable('pmp-table', {
+    rows: filt, rowHeight: 30, colCount: 17 + 12,
+    headHtml: pmpHead(),
+    renderRow: (e)=>{
+      const cells = [
+        `<td class="sticky-col" style="left:0;">${val(e.id)}</td>`,
+        `<td class="sticky-col" style="left:50px;">${val(e.inv)}</td>`,
+        `<td class="sticky-col" style="left:150px;">${e.empty?'<i>Slot disponible</i>':val(e.equipo)}</td>`,
+        `<td>${val(e.fam)}</td>`,`<td>${val(e.carpeta)}</td>`,`<td>${val(e.servicio)}</td>`,
+        `<td>${val(e.unidad)}</td>`,`<td>${val(e.ubicacion)}</td>`,`<td>${val(e.procedencia)}</td>`,
+        `<td>${val(e.marca)}</td>`,`<td>${val(e.modelo)}</td>`,`<td>${val(e.serie)}</td>`,
+        `<td>${val(e.anio)}</td>`,`<td>${val(e.vur)}</td>`,`<td>${val(e.clas)}</td>`,
+        `<td>${val(e.enuBaja)}</td>`,`<td>${val(e.frecuencia)}</td>`,
+        ...e.pmpMeses.map(c=>`<td style="text-align:center;">${codeBadge(c)}</td>`)
+      ];
+      return cells.join('');
+    },
+    onRowClick: (e)=> openEquipoModal(e.key)
+  });
+}
+
+/* ============================================================
+   VISTA: REGISTRO
+   ============================================================ */
+const regFilters = { q:'', servicio:'', equipo:'', clas:'', frecuencia:'' };
+function renderRegistro(){
+  const root = document.getElementById('view-registro');
+  root.innerHTML = buildFilterBar('registro', regFilters, ()=>updateRegistro()) + `
+    <div id="reg-table" class="tbl-wrap flex-1"></div>`;
+  setTimeout(()=> updateRegistro(), 0);
+  lucide.createIcons();
+}
+function regHead(){
+  // Mes en row1 colspan 2, P/R en row2
+  return `<thead>
+    <tr>
+      <th class="sticky-col" rowspan="2" style="left:0;min-width:50px;">ID</th>
+      <th class="sticky-col" rowspan="2" style="left:50px;min-width:100px;">Inv.</th>
+      <th class="sticky-col" rowspan="2" style="left:150px;min-width:150px;">Equipo</th>
+      <th rowspan="2">Familia</th><th rowspan="2">Servicio</th>
+      <th rowspan="2">Marca</th><th rowspan="2">Modelo</th>
+      <th rowspan="2">Frecuencia</th>
+      ${MONTHS.map(m=>`<th colspan="2" style="text-align:center;background:#e2e8f0;">${m}</th>`).join('')}
+    </tr>
+    <tr class="row2">
+      ${MONTHS.map(()=>`<th style="text-align:center;min-width:34px;">P</th><th style="text-align:center;min-width:42px;">R</th>`).join('')}
+    </tr>
+  </thead>`;
+}
+function resBadge(v){
+  if (!v) return '';
+  if (v==='Si') return `<span class="badge b-si">${escapeHtml(v)}</span>`;
+  if (v==='FS') return `<span class="badge b-fs" title="Fuera de servicio">${escapeHtml(v)}</span>`;
+  if (v==='Baja') return `<span class="badge b-baja">${escapeHtml(v)}</span>`;
+  if (v==='NU') return `<span class="badge b-nu" title="No ubicado">${escapeHtml(v)}</span>`;
+  if (CAUSAS[v]) return `<span class="badge b-c" title="${escapeHtml(CAUSAS[v])}">${escapeHtml(v)}</span>`;
+  return `<span class="badge b-baja">${escapeHtml(v)}</span>`;
+}
+function updateRegistro(){
+  const filt = applyFilter(state.equipos, regFilters);
+  document.getElementById('f-count-registro').textContent = `${filt.length} filas`;
+  virtualTable('reg-table', {
+    rows: filt, rowHeight: 30, colCount: 8 + 24,
+    headHtml: regHead(),
+    renderRow: (e)=>{
+      const months = [];
+      for (let m=0; m<12; m++){
+        months.push(`<td style="text-align:center;">${codeBadge(e.regProg[m])}</td>`);
+        months.push(`<td style="text-align:center;">${resBadge(e.regRes[m])}</td>`);
+      }
+      return [
+        `<td class="sticky-col" style="left:0;">${val(e.id)}</td>`,
+        `<td class="sticky-col" style="left:50px;">${val(e.inv)}</td>`,
+        `<td class="sticky-col" style="left:150px;">${e.empty?'<i>Slot disponible</i>':val(e.equipo)}</td>`,
+        `<td>${val(e.fam)}</td>`,`<td>${val(e.servicio)}</td>`,
+        `<td>${val(e.marca)}</td>`,`<td>${val(e.modelo)}</td>`,`<td>${val(e.frecuencia)}</td>`,
+        ...months
+      ].join('');
+    },
+    onRowClick: (e)=> openEquipoModal(e.key)
+  });
+}
+
+/* ============================================================
+   VISTA: PENDIENTES (global)
+   ============================================================ */
+const pendFilters = { q:'', estado:'todos', ejecutor:'', vencidos:false };
+function renderPendientes(){
+  const root = document.getElementById('view-pendientes');
+  root.innerHTML = `
+    <div class="bg-white border-b border-slate-200 px-4 py-3 flex flex-wrap gap-2 items-center flex-shrink-0">
+      <div class="relative flex-1 min-w-[220px] max-w-md">
+        <i data-lucide="search" class="absolute left-2 top-2.5 text-slate-400"></i>
+        <input id="p-q" class="input pl-8" placeholder="Buscar por inventario, serie, equipo o descripción..." />
+      </div>
+      <select id="p-estado" class="input w-auto">
+        <option value="todos">Todos</option>
+        <option value="abierto">Abiertos</option>
+        <option value="cerrado">Cerrados</option>
+      </select>
+      <select id="p-ejecutor" class="input w-auto">
+        <option value="">Todos los ejecutores</option>
+        ${EJECUTORES.map(e=>`<option>${escapeHtml(e)}</option>`).join('')}
+      </select>
+      <label class="text-sm text-slate-600 flex items-center gap-2"><input type="checkbox" id="p-venc" /> Solo vencidos</label>
+      <button class="btn btn-secondary" id="p-clear"><i data-lucide="x"></i> Limpiar</button>
+      <div class="ml-auto text-xs text-slate-500" id="p-count"></div>
+    </div>
+    <div id="p-list" class="flex-1 overflow-auto p-4 space-y-2"></div>`;
+  const bind = ()=>{
+    document.getElementById('p-q').addEventListener('input', e=>{ pendFilters.q = e.target.value; update(); });
+    document.getElementById('p-estado').addEventListener('change', e=>{ pendFilters.estado = e.target.value; update(); });
+    document.getElementById('p-ejecutor').addEventListener('change', e=>{ pendFilters.ejecutor = e.target.value; update(); });
+    document.getElementById('p-venc').addEventListener('change', e=>{ pendFilters.vencidos = e.target.checked; update(); });
+    document.getElementById('p-clear').addEventListener('click', ()=>{
+      pendFilters.q=''; pendFilters.estado='todos'; pendFilters.ejecutor=''; pendFilters.vencidos=false;
+      renderPendientes();
+    });
+  };
+  function update(){
+    const today = todayISO();
+    const items = [];
+    Object.entries(state.pendientes).forEach(([key, arr])=>{
+      const eq = state.equipos.find(e=>e.key===key);
+      (arr||[]).forEach(p=> items.push({...p, key, eq}));
+    });
+    const q = pendFilters.q.toLowerCase().trim();
+    const filt = items.filter(p=>{
+      if (pendFilters.estado !== 'todos' && p.estado !== pendFilters.estado) return false;
+      if (pendFilters.ejecutor && p.ejecutor !== pendFilters.ejecutor) return false;
+      if (pendFilters.vencidos && !(p.fechaCompromiso && p.fechaCompromiso < today && p.estado === 'abierto')) return false;
+      if (q){
+        const hay = [p.descripcion, p.eq?.inv, p.eq?.serie, p.eq?.equipo].map(x=>(x==null?'':String(x).toLowerCase())).join(' | ');
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    }).sort((a,b)=> (b.fecha||'').localeCompare(a.fecha||''));
+    document.getElementById('p-count').textContent = `${filt.length} pendientes`;
+    const list = document.getElementById('p-list');
+    if (!filt.length){
+      list.innerHTML = `<div class="text-center text-sm text-slate-500 py-12">Sin pendientes que coincidan con los filtros.</div>`;
+      return;
+    }
+    list.innerHTML = filt.map(p=>{
+      const vencido = p.fechaCompromiso && p.fechaCompromiso < today && p.estado === 'abierto';
+      const estadoPill = p.estado === 'abierto'
+        ? `<span class="pill bg-amber-100 text-amber-800">Abierto</span>`
+        : `<span class="pill bg-slate-200 text-slate-700">Cerrado</span>`;
+      return `<div class="bg-white border ${vencido?'border-red-300':'border-slate-200'} rounded-md p-3 flex gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <button class="text-blue-700 font-medium text-sm hover:underline" onclick="openEquipoModal('${p.key}')">
+              ${escapeHtml(p.eq?.equipo || '(sin equipo)')} · ${escapeHtml(p.eq?.inv || p.eq?.id || p.key)}
+            </button>
+            ${estadoPill}
+            ${vencido?'<span class="pill bg-red-100 text-red-800">Vencido</span>':''}
+          </div>
+          <div class="text-sm text-slate-700 mb-1">${escapeHtml(p.descripcion)}</div>
+          <div class="text-xs text-slate-500 flex gap-3 flex-wrap">
+            <span><b>Creado:</b> ${fmtDateInput(p.fecha)}</span>
+            ${p.fechaCompromiso?`<span><b>Compromiso:</b> ${fmtDateInput(p.fechaCompromiso)}</span>`:''}
+            ${p.ejecutor?`<span><b>Ejecutor:</b> ${escapeHtml(p.ejecutor)}</span>`:''}
+          </div>
+        </div>
+        <div class="flex flex-col gap-1">
+          ${p.estado==='abierto'
+            ? `<button class="btn btn-success" onclick="togglePendiente('${p.key}','${p.id}')"><i data-lucide="check"></i> Cerrar</button>`
+            : `<button class="btn btn-secondary" onclick="togglePendiente('${p.key}','${p.id}')"><i data-lucide="rotate-ccw"></i> Reabrir</button>`}
+        </div>
+      </div>`;
+    }).join('');
+    lucide.createIcons();
+  }
+  bind();
+  // restore current filter values into inputs
+  document.getElementById('p-q').value = pendFilters.q;
+  document.getElementById('p-estado').value = pendFilters.estado;
+  document.getElementById('p-ejecutor').value = pendFilters.ejecutor;
+  document.getElementById('p-venc').checked = pendFilters.vencidos;
+  update();
+  lucide.createIcons();
+}
+function togglePendiente(key, pid){
+  const arr = state.pendientes[key] || [];
+  const it = arr.find(p=>p.id===pid);
+  if (!it) return;
+  it.estado = it.estado === 'abierto' ? 'cerrado' : 'abierto';
+  savePersisted();
+  // Re-render
+  if (document.getElementById('view-pendientes').classList.contains('hidden')){
+    // probably modal open
+    refreshEquipoModalIfOpen(key);
+  } else {
+    renderPendientes();
+  }
+}
+
+/* ============================================================
+   VISTA: VERIFICACIÓN
+   ============================================================ */
+function renderVerificacion(){
+  const v = state.verif; if (!v) return;
+  const root = document.getElementById('view-verificacion');
+  const famKeysOrder = ['Monitores','Ventiladores','Desfibriladores','M Anestesia','Incubadoras','Máquina de Diálisis'];
+  const fam = v.familias;
+  const famHtml = famKeysOrder.map(k=>{
+    const n = fam[k] || 0;
+    return `<div class="bg-white rounded border border-slate-200 p-3">
+      <div class="text-xs text-slate-500">${escapeHtml(k)}</div>
+      <div class="text-2xl font-semibold text-slate-800">${n}</div>
+    </div>`;
+  }).join('');
+  const otros = Object.entries(fam).filter(([k])=> !famKeysOrder.includes(k));
+  const otrosTotal = otros.reduce((s,[,n])=>s+n,0);
+  const otrosHtml = `<div class="bg-white rounded border border-slate-200 p-3">
+    <div class="text-xs text-slate-500">Otros (${otros.length} grupos)</div>
+    <div class="text-2xl font-semibold text-slate-800">${otrosTotal}</div>
+    <div class="text-xs text-slate-500 mt-1">${otros.map(([k,n])=>`${escapeHtml(k)}: ${n}`).join(', ') || '—'}</div>
+  </div>`;
+
+  const codeTable = (counts, title, codes)=>{
+    const allCodes = codes || Object.keys(counts);
+    if (!allCodes.length) return `<div class="text-sm text-slate-500">Sin datos.</div>`;
+    return `<table class="tbl text-xs" style="min-width:100%;">
+      <thead><tr><th class="sticky-col" style="left:0;">${escapeHtml(title)}</th>${MONTHS.map(m=>`<th style="text-align:center;">${m}</th>`).join('')}<th>Total</th></tr></thead>
+      <tbody>
+        ${allCodes.map(c=>{
+          const row = counts[c] || Array(12).fill(0);
+          const total = row.reduce((s,n)=>s+n,0);
+          return `<tr><td class="sticky-col" style="left:0;font-weight:600;">${escapeHtml(c)}</td>${row.map(n=>`<td style="text-align:center;">${n||''}</td>`).join('')}<td style="text-align:center;font-weight:600;">${total}</td></tr>`;
+        }).join('')}
+      </tbody></table>`;
+  };
+
+  const incons = [];
+  if (v.duplicados.length) incons.push(`<li><b>${v.duplicados.length}</b> claves duplicadas (mismo N° Inventario): ${v.duplicados.slice(0,8).map(escapeHtml).join(', ')}${v.duplicados.length>8?'...':''}</li>`);
+  if (v.parciales.length) incons.push(`<li><b>${v.parciales.length}</b> filas con datos parciales (slots vacíos): ${v.parciales.slice(0,8).map(p=>'ID '+p.id).join(', ')}${v.parciales.length>8?'...':''}</li>`);
+
+  root.innerHTML = `
+    <div class="max-w-7xl mx-auto space-y-6">
+      <div>
+        <h2 class="text-lg font-semibold mb-1">Resumen de carga</h2>
+        <p class="text-sm text-slate-500">Contraste estos números con el archivo Excel original.</p>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-white rounded border border-slate-200 p-3"><div class="text-xs text-slate-500">Filas leídas PMP_2026</div><div class="text-2xl font-semibold">${v.pmpRows}</div></div>
+        <div class="bg-white rounded border border-slate-200 p-3"><div class="text-xs text-slate-500">Filas leídas Registro_MP-2026</div><div class="text-2xl font-semibold">${v.regRows}</div></div>
+        <div class="bg-white rounded border border-slate-200 p-3"><div class="text-xs text-slate-500">Equipos válidos</div><div class="text-2xl font-semibold text-green-700">${v.validos}</div></div>
+        <div class="bg-white rounded border border-slate-200 p-3"><div class="text-xs text-slate-500">Slots vacíos</div><div class="text-2xl font-semibold text-slate-500">${v.slots}</div></div>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold mb-2 text-slate-700">Equipos por familia</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">${famHtml}${otrosHtml}</div>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold mb-2 text-slate-700">Códigos PMP por mes (programación)</h3>
+        <div class="bg-white rounded border border-slate-200 overflow-auto">${codeTable(v.codeCounts, 'Código', ['X','R','RA','PM'])}</div>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold mb-2 text-slate-700">Resultados por mes (registro)</h3>
+        <div class="bg-white rounded border border-slate-200 overflow-auto">${codeTable(v.resCounts, 'Resultado', ['Si','C1','C2','C3','C4','C5','C6','C7','C8','FS','Baja','NU'])}</div>
+      </div>
+
+      <div>
+        <h3 class="text-sm font-semibold mb-2 text-slate-700">Inconsistencias detectadas</h3>
+        ${incons.length
+          ? `<ul class="bg-white border border-slate-200 rounded p-3 text-sm list-disc pl-6 space-y-1">${incons.join('')}</ul>`
+          : `<div class="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">Sin inconsistencias detectadas.</div>`}
+      </div>
+    </div>`;
+}
+
+/* ============================================================
+   FICHA DEL EQUIPO (modal)
+   ============================================================ */
+let openEquipoKey = null;
+function openEquipoModal(key){
+  openEquipoKey = key;
+  renderEquipoModal();
+}
+function refreshEquipoModalIfOpen(key){
+  if (openEquipoKey === key) renderEquipoModal();
+}
+function closeModal(){
+  openEquipoKey = null;
+  document.getElementById('modals').innerHTML = '';
+}
+function renderEquipoModal(){
+  const e = state.equipos.find(x=>x.key === openEquipoKey);
+  if (!e){ closeModal(); return; }
+  const evs = (state.eventos[e.key] || []).slice().sort((a,b)=> (b.fecha||'').localeCompare(a.fecha||''));
+  const pends = state.pendientes[e.key] || [];
+  const datos = [
+    ['ID', e.id], ['N° Carpeta', e.carpeta], ['N° Inventario', e.inv], ['Serie', e.serie],
+    ['Equipo', e.equipo], ['Familia', e.fam], ['Servicio', e.servicio], ['Unidad', e.unidad],
+    ['Ubicación', e.ubicacion], ['Procedencia', e.procedencia], ['Marca', e.marca], ['Modelo', e.modelo],
+    ['Año Instalación', e.anio], ['Vida Útil Residual', e.vur], ['Clasificación', e.clas], ['Frecuencia MP', e.frecuencia]
+  ];
+  const eventoCard = (ev)=>{
+    const t = TIPOS_EVENTO[ev.tipo] || { label: ev.tipo, icon:'circle', color:'slate' };
+    const colorMap = { blue:'border-blue-300 bg-blue-50', orange:'border-orange-300 bg-orange-50', purple:'border-purple-300 bg-purple-50', green:'border-green-300 bg-green-50', red:'border-red-300 bg-red-50' };
+    const txtMap = { blue:'text-blue-700', orange:'text-orange-700', purple:'text-purple-700', green:'text-green-700', red:'text-red-700' };
+    let details = '';
+    if (ev.tipo==='mp'){
+      details = `<div class="text-xs text-slate-700 mt-1">Resultado: <b>${escapeHtml(ev.resultado||'—')}</b>${ev.resultado && CAUSAS[ev.resultado] ? ' ('+escapeHtml(CAUSAS[ev.resultado])+')' : ''} · Estado: ${escapeHtml(ev.estado||'—')} · Ejecutor: ${escapeHtml(ev.ejecutor||'—')}</div>`;
+      if (ev.observacion) details += `<div class="text-xs text-slate-600 mt-1">${escapeHtml(ev.observacion)}</div>`;
+    } else if (ev.tipo==='envio'){
+      details = `<div class="text-xs text-slate-700 mt-1">N° envío: <b>${escapeHtml(ev.nEnvio||'—')}</b> · Empresa: ${escapeHtml(ev.empresa||'—')} · Folio: ${escapeHtml(ev.folio||'—')} · Estado: ${escapeHtml(ev.estado||'—')} · Ejecutor: ${escapeHtml(ev.ejecutor||'—')}</div>`;
+      if (ev.comentario) details += `<div class="text-xs text-slate-600 mt-1">${escapeHtml(ev.comentario)}</div>`;
+    } else if (ev.tipo==='solicitud'){
+      details = `<div class="text-xs text-slate-700 mt-1">Folio: <b>${escapeHtml(ev.folio||'—')}</b> · Ejecutor: ${escapeHtml(ev.ejecutor||'—')} · Estado: ${escapeHtml(ev.estado||'no operativo')}</div>`;
+      if (ev.comentario) details += `<div class="text-xs text-slate-600 mt-1">${escapeHtml(ev.comentario)}</div>`;
+    } else if (ev.tipo==='recepcion'){
+      details = `<div class="text-xs text-slate-700 mt-1">N° envío: <b>${escapeHtml(ev.nEnvio||'—')}</b> · Guía despacho: ${escapeHtml(ev.folioGuia||'—')} · Estado: ${escapeHtml(ev.estado||'—')}</div>`;
+    } else if (ev.tipo==='reparacion'){
+      details = `<div class="text-xs text-slate-700 mt-1">Estado: <b>${escapeHtml(ev.estado||'—')}</b></div>`;
+    }
+    return `<div class="border-l-4 ${colorMap[t.color]} border rounded-r-md p-3 flex gap-3">
+      <div class="${txtMap[t.color]} mt-0.5"><i data-lucide="${t.icon}"></i></div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2"><span class="text-sm font-medium ${txtMap[t.color]}">${escapeHtml(t.label)}</span><span class="text-xs text-slate-500">${fmtDateInput(ev.fecha)}</span></div>
+        ${details}
+      </div>
+      <button class="text-slate-400 hover:text-red-600" title="Eliminar" onclick="deleteEvento('${e.key}','${ev.id}')"><i data-lucide="trash-2"></i></button>
+    </div>`;
+  };
+
+  const html = `
+    <div class="modal-bg" onclick="if(event.target===this) closeModal()">
+      <div class="modal">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center gap-3 sticky top-0 bg-white z-10">
+          <i data-lucide="hard-drive" class="text-blue-600"></i>
+          <div class="flex-1">
+            <div class="text-base font-semibold text-slate-800">${escapeHtml(e.equipo || 'Slot disponible')}</div>
+            <div class="text-xs text-slate-500">N° Inv: ${escapeHtml(e.inv || '—')} · Serie: ${escapeHtml(e.serie || '—')} · ID: ${escapeHtml(e.id || '—')}</div>
+          </div>
+          <button class="btn btn-secondary" onclick="closeModal()"><i data-lucide="x"></i> Cerrar</button>
+        </div>
+        <div class="p-5 space-y-4">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 bg-slate-50 rounded p-3 text-sm">
+            ${datos.map(([k,v])=>`<div><div class="text-xs text-slate-500">${k}</div><div class="font-medium text-slate-800">${val(v)}</div></div>`).join('')}
+          </div>
+
+          <details open class="bg-white border border-slate-200 rounded">
+            <summary class="px-3 py-2 font-medium text-sm flex items-center gap-2 bg-slate-50 rounded-t"><i data-lucide="chevron-right" class="chev"></i> Programación MP 2026</summary>
+            <div class="p-3 overflow-auto">
+              <table class="tbl text-xs" style="min-width:100%;">
+                <thead><tr><th></th>${MONTHS.map(m=>`<th style="text-align:center;">${m}</th>`).join('')}</tr></thead>
+                <tbody>
+                  <tr><td class="font-medium">Programación</td>${e.pmpMeses.map(c=>`<td style="text-align:center;">${codeBadge(c)}</td>`).join('')}</tr>
+                  <tr><td class="font-medium">Resultado</td>${e.regRes.map(c=>`<td style="text-align:center;">${resBadge(c)}</td>`).join('')}</tr>
+                </tbody>
+              </table>
+              ${e.regObs?`<div class="text-xs text-slate-600 mt-2"><b>Observación archivo:</b> ${escapeHtml(e.regObs)}</div>`:''}
+            </div>
+          </details>
+
+          <details open class="bg-white border border-slate-200 rounded">
+            <summary class="px-3 py-2 font-medium text-sm flex items-center justify-between gap-2 bg-slate-50 rounded-t">
+              <span><i data-lucide="chevron-right" class="chev"></i> Registros asociados <span class="text-xs text-slate-500">(${evs.length})</span></span>
+              <button class="btn btn-primary" onclick="event.preventDefault(); openEventoForm('${e.key}')"><i data-lucide="plus"></i> Nuevo registro</button>
+            </summary>
+            <div class="p-3 space-y-2">
+              ${evs.length ? evs.map(eventoCard).join('') : '<div class="text-sm text-slate-500 italic">Sin registros aún.</div>'}
+            </div>
+          </details>
+
+          <details open class="bg-white border border-slate-200 rounded">
+            <summary class="px-3 py-2 font-medium text-sm flex items-center justify-between gap-2 bg-slate-50 rounded-t">
+              <span><i data-lucide="chevron-right" class="chev"></i> Pendientes <span class="text-xs text-slate-500">(${pends.filter(p=>p.estado==='abierto').length} abiertos / ${pends.length} totales)</span></span>
+              <button class="btn btn-primary" onclick="event.preventDefault(); openPendienteForm('${e.key}')"><i data-lucide="plus"></i> Nuevo pendiente</button>
+            </summary>
+            <div class="p-3 space-y-2">
+              ${pends.length ? pends.map(p=>{
+                const venc = p.fechaCompromiso && p.fechaCompromiso < todayISO() && p.estado==='abierto';
+                return `<div class="flex items-start gap-2 border rounded p-2 ${venc?'border-red-300 bg-red-50':'border-slate-200'}">
+                  <input type="checkbox" ${p.estado==='cerrado'?'checked':''} onchange="togglePendiente('${e.key}','${p.id}')" class="mt-1" />
+                  <div class="flex-1">
+                    <div class="text-sm ${p.estado==='cerrado'?'line-through text-slate-500':''}">${escapeHtml(p.descripcion)}</div>
+                    <div class="text-xs text-slate-500">Creado ${fmtDateInput(p.fecha)} · Compromiso ${p.fechaCompromiso?fmtDateInput(p.fechaCompromiso):'—'} · Ejecutor ${escapeHtml(p.ejecutor||'—')} ${venc?'· <span class="text-red-600 font-medium">Vencido</span>':''}</div>
+                  </div>
+                  <button class="text-slate-400 hover:text-red-600" onclick="deletePendiente('${e.key}','${p.id}')"><i data-lucide="trash-2"></i></button>
+                </div>`;
+              }).join('') : '<div class="text-sm text-slate-500 italic">Sin pendientes.</div>'}
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modals').innerHTML = html;
+  lucide.createIcons();
+}
+
+function deleteEvento(key, id){
+  if (!confirm('¿Eliminar este registro?')) return;
+  state.eventos[key] = (state.eventos[key]||[]).filter(e=>e.id!==id);
+  savePersisted();
+  renderEquipoModal();
+}
+function deletePendiente(key, id){
+  if (!confirm('¿Eliminar este pendiente?')) return;
+  state.pendientes[key] = (state.pendientes[key]||[]).filter(p=>p.id!==id);
+  savePersisted();
+  renderEquipoModal();
+}
+
+/* ============================================================
+   FORMULARIOS: EVENTOS Y PENDIENTES
+   ============================================================ */
+function openEventoForm(key){
+  const html = `
+    <div class="modal-bg" onclick="if(event.target===this) closeForm()">
+      <div class="modal modal-sm">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+          <i data-lucide="plus-circle" class="text-blue-600"></i>
+          <div class="font-semibold flex-1">Nuevo registro</div>
+          <button class="btn btn-secondary" onclick="closeForm()"><i data-lucide="x"></i></button>
+        </div>
+        <form id="evt-form" class="p-5 space-y-3" onsubmit="event.preventDefault(); saveEvento('${key}');">
+          <div>
+            <label class="text-xs text-slate-600 font-medium">Tipo de evento</label>
+            <select id="evt-tipo" class="input" onchange="renderEventoFields()">
+              <option value="mp">Mantención preventiva</option>
+              <option value="envio">Envío a servicio técnico</option>
+              <option value="solicitud">Solicitud de trabajo</option>
+              <option value="recepcion">Recepción</option>
+              <option value="reparacion">Reparación</option>
+            </select>
+          </div>
+          <div id="evt-fields" class="space-y-3"></div>
+          <div class="flex justify-end gap-2 pt-2 border-t">
+            <button type="button" class="btn btn-secondary" onclick="closeForm()">Cancelar</button>
+            <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+  document.getElementById('modals').insertAdjacentHTML('beforeend', html);
+  renderEventoFields();
+  lucide.createIcons();
+}
+function renderEventoFields(){
+  const tipo = document.getElementById('evt-tipo').value;
+  const today = todayISO();
+  const ejecOpts = `<option value="">— seleccionar —</option>${EJECUTORES.map(e=>`<option>${escapeHtml(e)}</option>`).join('')}`;
+  const estadoOpts = `<option value="operativo">Operativo</option><option value="no operativo">No operativo</option>`;
+  const resOpts = `<option value="">— seleccionar —</option>${RESULTADOS.map(r=>`<option value="${r}">${r}${CAUSAS[r]?' — '+CAUSAS[r]:''}</option>`).join('')}`;
+  let html = '';
+  if (tipo==='mp'){
+    html = `
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs font-medium text-slate-600">Fecha</label><input type="date" id="ev-fecha" class="input" value="${today}" required></div>
+        <div><label class="text-xs font-medium text-slate-600">Resultado</label><select id="ev-resultado" class="input" required>${resOpts}</select></div>
+        <div><label class="text-xs font-medium text-slate-600">Ejecutor</label><select id="ev-ejecutor" class="input" required>${ejecOpts}</select></div>
+        <div><label class="text-xs font-medium text-slate-600">Estado del equipo</label><select id="ev-estado" class="input">${estadoOpts}</select></div>
+      </div>
+      <div><label class="text-xs font-medium text-slate-600">Observación (si resultado = Si)</label><textarea id="ev-obs" class="input" rows="2"></textarea></div>`;
+  } else if (tipo==='envio'){
+    html = `
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs font-medium text-slate-600">Fecha envío</label><input type="date" id="ev-fecha" class="input" value="${today}" required></div>
+        <div><label class="text-xs font-medium text-slate-600">N° envío</label><input type="text" id="ev-nenvio" class="input"></div>
+        <div><label class="text-xs font-medium text-slate-600">Empresa</label><input type="text" id="ev-empresa" class="input"></div>
+        <div><label class="text-xs font-medium text-slate-600">Ejecutor</label><select id="ev-ejecutor" class="input">${ejecOpts}</select></div>
+        <div><label class="text-xs font-medium text-slate-600">Folio solicitud</label><input type="text" id="ev-folio" class="input"></div>
+        <div><label class="text-xs font-medium text-slate-600">Estado del equipo</label><select id="ev-estado" class="input">${estadoOpts}</select></div>
+      </div>
+      <div><label class="text-xs font-medium text-slate-600">Comentario</label><textarea id="ev-com" class="input" rows="2"></textarea></div>`;
+  } else if (tipo==='solicitud'){
+    html = `
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs font-medium text-slate-600">Fecha solicitud</label><input type="date" id="ev-fecha" class="input" value="${today}" required></div>
+        <div><label class="text-xs font-medium text-slate-600">Ejecutor asignado</label><select id="ev-ejecutor" class="input">${ejecOpts}</select></div>
+        <div><label class="text-xs font-medium text-slate-600">Folio solicitud</label><input type="text" id="ev-folio" class="input"></div>
+        <div><label class="text-xs font-medium text-slate-600">Estado</label><input type="text" id="ev-estado" class="input" value="no operativo" readonly></div>
+      </div>
+      <div><label class="text-xs font-medium text-slate-600">Comentario</label><textarea id="ev-com" class="input" rows="2"></textarea></div>`;
+  } else if (tipo==='recepcion'){
+    html = `
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs font-medium text-slate-600">Fecha recepción</label><input type="date" id="ev-fecha" class="input" value="${today}" required></div>
+        <div><label class="text-xs font-medium text-slate-600">N° envío</label><input type="text" id="ev-nenvio" class="input"></div>
+        <div><label class="text-xs font-medium text-slate-600">Folio guía de despacho</label><input type="text" id="ev-folioguia" class="input"></div>
+        <div><label class="text-xs font-medium text-slate-600">Estado del equipo</label><select id="ev-estado" class="input">${estadoOpts}</select></div>
+      </div>`;
+  } else if (tipo==='reparacion'){
+    html = `
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-xs font-medium text-slate-600">Fecha reparación</label><input type="date" id="ev-fecha" class="input" value="${today}" required></div>
+        <div><label class="text-xs font-medium text-slate-600">Estado del equipo</label><select id="ev-estado" class="input">${estadoOpts}</select></div>
+      </div>`;
+  }
+  document.getElementById('evt-fields').innerHTML = html;
+}
+function saveEvento(key){
+  const tipo = document.getElementById('evt-tipo').value;
+  const ev = { id: uid(), tipo, fecha: document.getElementById('ev-fecha').value };
+  const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  if (tipo==='mp'){       Object.assign(ev, { resultado: g('ev-resultado'), ejecutor: g('ev-ejecutor'), estado: g('ev-estado'), observacion: g('ev-obs') }); }
+  else if (tipo==='envio'){     Object.assign(ev, { nEnvio: g('ev-nenvio'), empresa: g('ev-empresa'), ejecutor: g('ev-ejecutor'), folio: g('ev-folio'), estado: g('ev-estado'), comentario: g('ev-com') }); }
+  else if (tipo==='solicitud'){ Object.assign(ev, { ejecutor: g('ev-ejecutor'), folio: g('ev-folio'), estado: g('ev-estado'), comentario: g('ev-com') }); }
+  else if (tipo==='recepcion'){ Object.assign(ev, { nEnvio: g('ev-nenvio'), folioGuia: g('ev-folioguia'), estado: g('ev-estado') }); }
+  else if (tipo==='reparacion'){Object.assign(ev, { estado: g('ev-estado') }); }
+  state.eventos[key] = state.eventos[key] || [];
+  state.eventos[key].push(ev);
+  savePersisted();
+  closeForm();
+  toast('Registro guardado');
+  if (openEquipoKey === key) renderEquipoModal();
+}
+
+function openPendienteForm(key){
+  const today = todayISO();
+  const html = `
+    <div class="modal-bg" onclick="if(event.target===this) closeForm()">
+      <div class="modal modal-sm">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+          <i data-lucide="plus-circle" class="text-amber-600"></i>
+          <div class="font-semibold flex-1">Nuevo pendiente</div>
+          <button class="btn btn-secondary" onclick="closeForm()"><i data-lucide="x"></i></button>
+        </div>
+        <form class="p-5 space-y-3" onsubmit="event.preventDefault(); savePendiente('${key}');">
+          <div><label class="text-xs font-medium text-slate-600">Descripción</label><textarea id="p-desc" class="input" rows="3" required></textarea></div>
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="text-xs font-medium text-slate-600">Fecha creación</label><input type="date" id="p-fecha" class="input" value="${today}" required></div>
+            <div><label class="text-xs font-medium text-slate-600">Fecha compromiso</label><input type="date" id="p-comp" class="input"></div>
+            <div class="col-span-2"><label class="text-xs font-medium text-slate-600">Ejecutor</label>
+              <select id="p-ejec" class="input"><option value="">— sin asignar —</option>${EJECUTORES.map(e=>`<option>${escapeHtml(e)}</option>`).join('')}</select>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 pt-2 border-t">
+            <button type="button" class="btn btn-secondary" onclick="closeForm()">Cancelar</button>
+            <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>`;
+  document.getElementById('modals').insertAdjacentHTML('beforeend', html);
+  lucide.createIcons();
+}
+function savePendiente(key){
+  const p = {
+    id: uid(),
+    descripcion: document.getElementById('p-desc').value.trim(),
+    fecha: document.getElementById('p-fecha').value,
+    fechaCompromiso: document.getElementById('p-comp').value || null,
+    ejecutor: document.getElementById('p-ejec').value || null,
+    estado: 'abierto'
+  };
+  if (!p.descripcion){ toast('La descripción es obligatoria','err'); return; }
+  state.pendientes[key] = state.pendientes[key] || [];
+  state.pendientes[key].push(p);
+  savePersisted();
+  closeForm();
+  toast('Pendiente guardado');
+  if (openEquipoKey === key) renderEquipoModal();
+}
+function closeForm(){
+  // Remove only the last modal (the form)
+  const mods = document.getElementById('modals');
+  if (mods.children.length > 1) mods.removeChild(mods.lastChild);
+  else if (openEquipoKey) renderEquipoModal();
+  else mods.innerHTML = '';
+}
+
+/* ============================================================
+   EXPORT / IMPORT JSON
+   ============================================================ */
+function exportJSON(){
+  const data = { version: 1, exportedAt: new Date().toISOString(), eventos: state.eventos, pendientes: state.pendientes };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `mp_datos_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Datos exportados');
+}
+document.getElementById('json-input').addEventListener('change', async (e)=>{
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const txt = await f.text();
+    const j = JSON.parse(txt);
+    if (!j || typeof j !== 'object'){ throw new Error('Formato inválido'); }
+    if (!confirm('Reemplazar eventos y pendientes actuales con los datos importados?')) { e.target.value=''; return; }
+    state.eventos = j.eventos || {};
+    state.pendientes = j.pendientes || {};
+    savePersisted();
+    toast('Datos importados correctamente');
+    if (state.loaded) selectView('pendientes');
+  } catch(err){
+    toast('Error al importar: '+err.message,'err');
+  } finally { e.target.value=''; }
+});
+
+/* ============================================================
+   INIT
+   ============================================================ */
+loadPersisted();
+lucide.createIcons();
+</script>
+</body>
+</html>
