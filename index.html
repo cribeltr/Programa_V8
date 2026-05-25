@@ -74,8 +74,7 @@
       <div class="text-xs text-slate-400 mt-0.5">HHHA · Biomédica</div>
     </div>
     <nav class="flex-1 p-3 space-y-1">
-      <div class="sidebar-btn active" data-view="pmp"><i data-lucide="calendar-days"></i> Programación PMP</div>
-      <div class="sidebar-btn" data-view="registro"><i data-lucide="clipboard-list"></i> Registro de resultados</div>
+      <div class="sidebar-btn active" data-view="equipos"><i data-lucide="search"></i> Buscar equipos</div>
       <div class="sidebar-btn" data-view="pendientes"><i data-lucide="alert-circle"></i> Pendientes</div>
       <div class="sidebar-btn" data-view="verificacion"><i data-lucide="bar-chart-3"></i> Verificación de carga</div>
     </nav>
@@ -88,7 +87,7 @@
   <div class="flex-1 flex flex-col min-w-0">
     <!-- Header -->
     <header class="bg-white border-b border-slate-200 px-5 py-3 flex items-center gap-3 flex-shrink-0">
-      <h1 id="view-title" class="text-base font-semibold text-slate-800 mr-auto">Programación PMP</h1>
+      <h1 id="view-title" class="text-base font-semibold text-slate-800 mr-auto">Buscar equipos</h1>
       <div id="counter" class="text-xs text-slate-500 mr-2"></div>
       <input type="file" id="file-input" accept=".xlsm,.xlsx,.xls" class="hidden" />
       <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
@@ -120,8 +119,7 @@
         </div>
       </div>
       <!-- Views injected here -->
-      <div id="view-pmp" class="hidden h-full flex flex-col"></div>
-      <div id="view-registro" class="hidden h-full flex flex-col"></div>
+      <div id="view-equipos" class="hidden h-full flex flex-col"></div>
       <div id="view-pendientes" class="hidden h-full flex flex-col"></div>
       <div id="view-verificacion" class="hidden h-full p-6 overflow-auto"></div>
     </main>
@@ -264,7 +262,7 @@ document.getElementById('file-input').addEventListener('change', async (e)=>{
     saveData();
     updateCounter();
     document.getElementById('no-data').classList.add('hidden');
-    // Mostrar vista de verificación por defecto al cargar
+    // Mostrar verificación al cargar el archivo por primera vez
     selectView('verificacion');
     toast('Archivo cargado correctamente');
   } catch(err){
@@ -415,8 +413,8 @@ function effectiveRegRes(e){
 /* ============================================================
    NAVEGACIÓN ENTRE VISTAS
    ============================================================ */
-const VIEWS = ['pmp','registro','pendientes','verificacion'];
-const TITLES = { pmp:'Programación PMP', registro:'Registro de resultados', pendientes:'Pendientes', verificacion:'Verificación de carga' };
+const VIEWS = ['equipos','pendientes','verificacion'];
+const TITLES = { equipos:'Buscar equipos', pendientes:'Pendientes', verificacion:'Verificación de carga' };
 function selectView(v){
   if (!state.loaded){ toast('Cargue primero el archivo maestro','err'); return; }
   document.getElementById('no-data').classList.add('hidden');
@@ -426,8 +424,7 @@ function selectView(v){
   });
   document.querySelectorAll('.sidebar-btn').forEach(b=> b.classList.toggle('active', b.dataset.view === v));
   document.getElementById('view-title').textContent = TITLES[v];
-  if      (v==='pmp')          renderPMP();
-  else if (v==='registro')     renderRegistro();
+  if      (v==='equipos')      renderEquipos();
   else if (v==='pendientes')   renderPendientes();
   else if (v==='verificacion') renderVerificacion();
   lucide.createIcons();
@@ -469,10 +466,8 @@ function buildFilterBar(view, current, onChange){
     bind('q','q'); bind('serv','servicio'); bind('fam','equipo'); bind('clas','clas'); bind('frec','frecuencia');
     document.getElementById(`f-clear-${view}`).addEventListener('click', ()=>{
       Object.keys(current).forEach(k=> current[k]='');
-      onChange(); render(); // re-render filter bar to clear inputs
-      function render(){
-        if (view==='pmp') renderPMP(); else if (view==='registro') renderRegistro();
-      }
+      if (view==='equipos') renderEquipos();
+      else onChange();
     });
     lucide.createIcons();
   }, 0);
@@ -549,85 +544,38 @@ function virtualTable(containerId, opts){
 }
 
 /* ============================================================
-   VISTA: PROGRAMACIÓN PMP
+   ESTADOS DERIVADOS (equipo y pendiente)
    ============================================================ */
-const pmpFilters = { q:'', servicio:'', equipo:'', clas:'', frecuencia:'' };
-function renderPMP(){
-  const root = document.getElementById('view-pmp');
-  root.innerHTML = buildFilterBar('pmp', pmpFilters, ()=>updatePMP()) + `
-    <div id="pmp-table" class="tbl-wrap flex-1"></div>`;
-  setTimeout(()=> updatePMP(), 0);
-  lucide.createIcons();
+function getEquipoEstado(e){
+  const evs = (state.eventos[e.key]||[]).slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+  for (const ev of evs){ if (ev.estado) return ev.estado; }
+  return null;
 }
-function pmpHead(){
-  // sticky cols: ID, Inv, Equipo
-  return `<thead>
-    <tr>
-      <th class="sticky-col" style="left:0;min-width:50px;">ID</th>
-      <th class="sticky-col" style="left:50px;min-width:100px;">Inv.</th>
-      <th class="sticky-col" style="left:150px;min-width:150px;">Equipo</th>
-      <th>Familia</th><th>Carpeta</th><th>Servicio</th><th>Unidad</th><th>Ubicación</th>
-      <th>Procedencia</th><th>Marca</th><th>Modelo</th><th>Serie</th>
-      <th>Año</th><th>VUR</th><th>Clasif.</th><th>ENU/Baja</th><th>Frecuencia</th>
-      ${MONTHS.map(m=>`<th style="min-width:42px;text-align:center;">${m}</th>`).join('')}
-    </tr></thead>`;
+function getPendienteEstado(e){
+  const ps = state.pendientes[e.key]||[];
+  if (!ps.length) return null;
+  const today = todayISO();
+  if (ps.some(p => p.estado==='abierto' && p.fechaCompromiso && p.fechaCompromiso < today)) return 'vencido';
+  if (ps.some(p => p.estado==='abierto')) return 'abierto';
+  return 'cerrado';
+}
+function estadoEquipoBadge(s){
+  if (!s) return '<span class="text-slate-400 text-xs">—</span>';
+  if (s === 'operativo') return '<span class="badge bg-green-100 text-green-800">Operativo</span>';
+  if (s === 'no operativo') return '<span class="badge bg-red-100 text-red-800">No operativo</span>';
+  return `<span class="badge b-baja">${escapeHtml(s)}</span>`;
+}
+function estadoPendienteBadge(s, count){
+  if (!s) return '<span class="text-slate-400 text-xs">—</span>';
+  if (s === 'vencido') return `<span class="badge bg-red-100 text-red-800" title="${count} pendiente(s)">Vencido</span>`;
+  if (s === 'abierto') return `<span class="badge bg-amber-100 text-amber-800" title="${count} pendiente(s)">Abierto</span>`;
+  if (s === 'cerrado') return `<span class="badge bg-slate-200 text-slate-700" title="${count} pendiente(s)">Cerrado</span>`;
+  return '<span class="text-slate-400 text-xs">—</span>';
 }
 function codeBadge(c){
   if (!c) return '';
   const cls = c==='X'?'b-x':c==='R'?'b-r':c==='RA'?'b-ra':c==='PM'?'b-pm':'b-baja';
   return `<span class="badge ${cls}">${escapeHtml(c)}</span>`;
-}
-function updatePMP(){
-  const filt = applyFilter(state.equipos, pmpFilters);
-  document.getElementById('f-count-pmp').textContent = `${filt.length} filas`;
-  virtualTable('pmp-table', {
-    rows: filt, rowHeight: 30, colCount: 17 + 12,
-    headHtml: pmpHead(),
-    renderRow: (e)=>{
-      const cells = [
-        `<td class="sticky-col" style="left:0;">${val(e.id)}</td>`,
-        `<td class="sticky-col" style="left:50px;">${val(e.inv)}</td>`,
-        `<td class="sticky-col" style="left:150px;">${e.empty?'<i>Slot disponible</i>':val(e.equipo)}</td>`,
-        `<td>${val(e.fam)}</td>`,`<td>${val(e.carpeta)}</td>`,`<td>${val(e.servicio)}</td>`,
-        `<td>${val(e.unidad)}</td>`,`<td>${val(e.ubicacion)}</td>`,`<td>${val(e.procedencia)}</td>`,
-        `<td>${val(e.marca)}</td>`,`<td>${val(e.modelo)}</td>`,`<td>${val(e.serie)}</td>`,
-        `<td>${val(e.anio)}</td>`,`<td>${val(e.vur)}</td>`,`<td>${val(e.clas)}</td>`,
-        `<td>${val(e.enuBaja)}</td>`,`<td>${val(e.frecuencia)}</td>`,
-        ...e.pmpMeses.map(c=>`<td style="text-align:center;">${codeBadge(c)}</td>`)
-      ];
-      return cells.join('');
-    },
-    onRowClick: (e)=> openEquipoModal(e.key)
-  });
-}
-
-/* ============================================================
-   VISTA: REGISTRO
-   ============================================================ */
-const regFilters = { q:'', servicio:'', equipo:'', clas:'', frecuencia:'' };
-function renderRegistro(){
-  const root = document.getElementById('view-registro');
-  root.innerHTML = buildFilterBar('registro', regFilters, ()=>updateRegistro()) + `
-    <div id="reg-table" class="tbl-wrap flex-1"></div>`;
-  setTimeout(()=> updateRegistro(), 0);
-  lucide.createIcons();
-}
-function regHead(){
-  // Mes en row1 colspan 2, P/R en row2
-  return `<thead>
-    <tr>
-      <th class="sticky-col" rowspan="2" style="left:0;min-width:50px;">ID</th>
-      <th class="sticky-col" rowspan="2" style="left:50px;min-width:100px;">Inv.</th>
-      <th class="sticky-col" rowspan="2" style="left:150px;min-width:150px;">Equipo</th>
-      <th rowspan="2">Familia</th><th rowspan="2">Servicio</th>
-      <th rowspan="2">Marca</th><th rowspan="2">Modelo</th>
-      <th rowspan="2">Frecuencia</th>
-      ${MONTHS.map(m=>`<th colspan="2" style="text-align:center;background:#e2e8f0;">${m}</th>`).join('')}
-    </tr>
-    <tr class="row2">
-      ${MONTHS.map(()=>`<th style="text-align:center;min-width:34px;">P</th><th style="text-align:center;min-width:42px;">R</th>`).join('')}
-    </tr>
-  </thead>`;
 }
 function resBadge(v){
   if (!v) return '';
@@ -638,27 +586,86 @@ function resBadge(v){
   if (CAUSAS[v]) return `<span class="badge b-c" title="${escapeHtml(CAUSAS[v])}">${escapeHtml(v)}</span>`;
   return `<span class="badge b-baja">${escapeHtml(v)}</span>`;
 }
-function updateRegistro(){
-  const filt = applyFilter(state.equipos, regFilters);
-  document.getElementById('f-count-registro').textContent = `${filt.length} filas`;
-  virtualTable('reg-table', {
-    rows: filt, rowHeight: 30, colCount: 8 + 24,
-    headHtml: regHead(),
+
+/* ============================================================
+   VISTA: BUSCAR EQUIPOS
+   ============================================================ */
+const equiposFilters = { q:'', servicio:'', equipo:'', clas:'', frecuencia:'', estadoEq:'', estadoPe:'' };
+function renderEquipos(){
+  const root = document.getElementById('view-equipos');
+  root.innerHTML = buildFilterBar('equipos', equiposFilters, ()=>updateEquipos()) + `
+    <div id="eq-table" class="tbl-wrap flex-1"></div>`;
+  // Añadir filtros extra de estado
+  setTimeout(()=>{
+    const bar = document.querySelector('#view-equipos > div'); // filter bar
+    const extra = document.createElement('div');
+    extra.className = 'flex gap-2 flex-wrap basis-full';
+    extra.innerHTML = `
+      <select id="f-estadoEq" class="input w-auto" style="max-width:200px;">
+        <option value="">Estado equipo: todos</option>
+        <option value="operativo">Operativo</option>
+        <option value="no operativo">No operativo</option>
+        <option value="sin">Sin registros</option>
+      </select>
+      <select id="f-estadoPe" class="input w-auto" style="max-width:200px;">
+        <option value="">Estado pendiente: todos</option>
+        <option value="vencido">Vencido</option>
+        <option value="abierto">Abierto</option>
+        <option value="cerrado">Cerrado</option>
+        <option value="sin">Sin pendientes</option>
+      </select>`;
+    bar.appendChild(extra);
+    document.getElementById('f-estadoEq').value = equiposFilters.estadoEq;
+    document.getElementById('f-estadoPe').value = equiposFilters.estadoPe;
+    document.getElementById('f-estadoEq').addEventListener('change', e=>{ equiposFilters.estadoEq = e.target.value; updateEquipos(); });
+    document.getElementById('f-estadoPe').addEventListener('change', e=>{ equiposFilters.estadoPe = e.target.value; updateEquipos(); });
+    updateEquipos();
+  }, 0);
+  lucide.createIcons();
+}
+function equiposHead(){
+  return `<thead>
+    <tr>
+      <th class="sticky-col" style="left:0;min-width:50px;">ID</th>
+      <th class="sticky-col" style="left:50px;min-width:100px;">Inv.</th>
+      <th class="sticky-col" style="left:150px;min-width:160px;">Equipo</th>
+      <th>Familia</th><th>Carpeta</th><th>Servicio</th><th>Unidad</th><th>Ubicación</th>
+      <th>Procedencia</th><th>Marca</th><th>Modelo</th><th>Serie</th>
+      <th style="text-align:center;">Estado Equipo</th>
+      <th style="text-align:center;">Estado Pendiente</th>
+    </tr></thead>`;
+}
+function updateEquipos(){
+  const f = equiposFilters;
+  let filt = applyFilter(state.equipos, f);
+  filt = filt.filter(e=>{
+    if (f.estadoEq){
+      const s = getEquipoEstado(e);
+      if (f.estadoEq === 'sin'){ if (s) return false; } else if (s !== f.estadoEq) return false;
+    }
+    if (f.estadoPe){
+      const s = getPendienteEstado(e);
+      if (f.estadoPe === 'sin'){ if (s) return false; } else if (s !== f.estadoPe) return false;
+    }
+    return true;
+  });
+  document.getElementById('f-count-equipos').textContent = `${filt.length} equipos`;
+  virtualTable('eq-table', {
+    rows: filt, rowHeight: 30, colCount: 14,
+    headHtml: equiposHead(),
     renderRow: (e)=>{
-      const { results, userMonths } = effectiveRegRes(e);
-      const months = [];
-      for (let m=0; m<12; m++){
-        months.push(`<td style="text-align:center;">${codeBadge(e.regProg[m])}</td>`);
-        const mark = userMonths.has(m) ? '<span title="Registrado en la app" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#2563eb;margin-right:3px;vertical-align:middle;"></span>' : '';
-        months.push(`<td style="text-align:center;">${mark}${resBadge(results[m])}</td>`);
-      }
+      const sEq = getEquipoEstado(e);
+      const sPe = getPendienteEstado(e);
+      const nPe = (state.pendientes[e.key]||[]).length;
       return [
         `<td class="sticky-col" style="left:0;">${val(e.id)}</td>`,
         `<td class="sticky-col" style="left:50px;">${val(e.inv)}</td>`,
         `<td class="sticky-col" style="left:150px;">${e.empty?'<i>Slot disponible</i>':val(e.equipo)}</td>`,
-        `<td>${val(e.fam)}</td>`,`<td>${val(e.servicio)}</td>`,
-        `<td>${val(e.marca)}</td>`,`<td>${val(e.modelo)}</td>`,`<td>${val(e.frecuencia)}</td>`,
-        ...months
+        `<td>${val(e.fam)}</td>`,`<td>${val(e.carpeta)}</td>`,`<td>${val(e.servicio)}</td>`,
+        `<td>${val(e.unidad)}</td>`,`<td>${val(e.ubicacion)}</td>`,`<td>${val(e.procedencia)}</td>`,
+        `<td>${val(e.marca)}</td>`,`<td>${val(e.modelo)}</td>`,`<td>${val(e.serie)}</td>`,
+        `<td style="text-align:center;">${estadoEquipoBadge(sEq)}</td>`,
+        `<td style="text-align:center;">${estadoPendienteBadge(sPe, nPe)}</td>`
       ].join('');
     },
     onRowClick: (e)=> openEquipoModal(e.key)
@@ -882,6 +889,13 @@ function refreshEquipoModalIfOpen(key){
 function closeModal(){
   openEquipoKey = null;
   document.getElementById('modals').innerHTML = '';
+  // Refrescar la vista activa para reflejar cambios en estados/pendientes
+  const active = document.querySelector('.sidebar-btn.active');
+  if (active){
+    const v = active.dataset.view;
+    if (v==='equipos') updateEquipos();
+    else if (v==='pendientes') renderPendientes();
+  }
 }
 function renderEquipoModal(){
   const e = state.equipos.find(x=>x.key === openEquipoKey);
@@ -1117,7 +1131,13 @@ function renderEventoFields(){
         <div><label class="text-xs font-medium text-slate-600">Fecha</label><input type="date" id="ev-fecha" class="input" value="${today}" required></div>
         <div><label class="text-xs font-medium text-slate-600">Resultado</label><select id="ev-resultado" class="input" required>${resOpts}</select></div>
         <div><label class="text-xs font-medium text-slate-600">Ejecutor</label><select id="ev-ejecutor" class="input" required>${ejecOpts}</select></div>
-        <div><label class="text-xs font-medium text-slate-600">Estado del equipo</label><select id="ev-estado" class="input">${estadoOpts}</select></div>
+        <div><label class="text-xs font-medium text-slate-600">Estado del equipo</label>
+          <select id="ev-estado" class="input" required>
+            <option value="">— seleccionar —</option>
+            <option value="operativo">Operativo</option>
+            <option value="no operativo">No operativo</option>
+          </select>
+        </div>
       </div>
       <div><label class="text-xs font-medium text-slate-600">Observación (si resultado = Si)</label><textarea id="ev-obs" class="input" rows="2"></textarea></div>`;
   } else if (tipo==='envio'){
@@ -1321,7 +1341,7 @@ loadPersisted();
 if (loadData()){
   document.getElementById('no-data').classList.add('hidden');
   updateCounter();
-  selectView('pmp');
+  selectView('equipos');
   toast('Datos restaurados desde caché');
 }
 lucide.createIcons();

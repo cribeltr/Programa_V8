@@ -15,8 +15,7 @@ Aplicación HTML standalone para gestionar el programa de mantenciones preventiv
 
 | Vista | Descripción |
 |---|---|
-| **Programación PMP** | Tabla completa de PMP_2026 (solo lectura). Códigos `X`, `R`, `RA`, `PM` coloreados. Filtros por servicio, familia, clasificación y frecuencia. Buscador local. |
-| **Registro de resultados** | Espejo de la hoja `Registro_MP-2026` con sub-columnas P (programación) y R (resultado). Tooltip con descripción de las causales C1–C8. |
+| **Buscar equipos** | Tabla maestra de equipos con identificación (ID, Inv., Equipo, Familia, Carpeta, Servicio, Unidad, Ubicación, Procedencia, Marca, Modelo, Serie) más **Estado de Equipo** (derivado del último evento) y **Estado de Pendiente** (vencido/abierto/cerrado). Filtros por servicio, familia, clasificación, frecuencia, estado de equipo y estado de pendiente. Buscador local. Click en fila abre la ficha del equipo con programación PMP, resultados y registros asociados. |
 | **Pendientes** | Listado global de pendientes con filtros por estado, ejecutor y vencidos. Botón para cerrar/reabrir. |
 | **Verificación de carga** | Conteos de filas, equipos válidos, slots vacíos, distribución por familia, códigos PMP × mes, resultados × mes e inconsistencias. |
 
