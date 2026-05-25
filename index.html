@@ -94,6 +94,9 @@
       <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">
         <i data-lucide="upload"></i> Cargar archivo maestro
       </button>
+      <button class="btn btn-secondary" onclick="exportXLSX()">
+        <i data-lucide="file-spreadsheet"></i> Exportar Excel
+      </button>
       <button class="btn btn-secondary" onclick="exportJSON()">
         <i data-lucide="download"></i> Exportar JSON
       </button>
@@ -163,10 +166,12 @@ const TIPOS_EVENTO = {
    ESTADO GLOBAL
    ============================================================ */
 const STORAGE_KEY = 'mp_app_state_v1';
+const DATA_KEY = 'mp_app_data_v1';
 const state = {
   equipos: [],          // [{ key, id, fam, carpeta, inv, equipo, servicio, unidad, ubicacion, procedencia, marca, modelo, serie, anio, vur, clas, enuBaja, frecuencia, pmpMeses:[12], regProg:[12], regRes:[12], obs, empty:bool }]
   loaded: false,
   fileName: '',
+  loadedAt: null,
   verif: null,
   // Persisted
   eventos: {},          // { key: [eventos...] }
@@ -187,6 +192,33 @@ function savePersisted(){
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ eventos: state.eventos, pendientes: state.pendientes }));
   } catch(e){ toast('Error guardando datos: '+e.message,'err'); }
+}
+function loadData(){
+  try {
+    const raw = localStorage.getItem(DATA_KEY);
+    if (!raw) return false;
+    const j = JSON.parse(raw);
+    if (!j || !Array.isArray(j.equipos) || !j.equipos.length) return false;
+    state.equipos = j.equipos;
+    state.verif = j.verif || null;
+    state.fileName = j.fileName || '(en caché)';
+    state.loadedAt = j.loadedAt || null;
+    state.loaded = true;
+    return true;
+  } catch(e){ console.warn('No se pudo cargar caché de datos:', e); return false; }
+}
+function saveData(){
+  try {
+    localStorage.setItem(DATA_KEY, JSON.stringify({
+      equipos: state.equipos, verif: state.verif,
+      fileName: state.fileName, loadedAt: state.loadedAt
+    }));
+  } catch(e){ toast('Error guardando caché del archivo: '+e.message,'err'); }
+}
+function clearDataCache(){
+  if (!confirm('¿Borrar el archivo cargado en caché? (Los eventos y pendientes se conservan)')) return;
+  localStorage.removeItem(DATA_KEY);
+  location.reload();
 }
 
 /* ============================================================
@@ -228,8 +260,10 @@ document.getElementById('file-input').addEventListener('change', async (e)=>{
     parseWorkbook(wb);
     state.loaded = true;
     state.fileName = f.name;
+    state.loadedAt = new Date().toISOString();
+    saveData();
+    updateCounter();
     document.getElementById('no-data').classList.add('hidden');
-    document.getElementById('counter').textContent = `${state.equipos.filter(x=>!x.empty).length} equipos · ${state.equipos.length} filas · ${f.name}`;
     // Mostrar vista de verificación por defecto al cargar
     selectView('verificacion');
     toast('Archivo cargado correctamente');
@@ -350,6 +384,32 @@ function parseWorkbook(wb){
     duplicados: [...new Set(dups)],
     parciales: partial
   };
+}
+
+function updateCounter(){
+  const fileInfo = state.fileName + (state.loadedAt ? ' · ' + fmtDateInput(state.loadedAt.slice(0,10)) : '');
+  document.getElementById('counter').innerHTML = `${state.equipos.filter(x=>!x.empty).length} equipos · ${state.equipos.length} filas · ${escapeHtml(fileInfo)} <button class="ml-2 text-slate-400 hover:text-red-600" title="Limpiar caché del archivo" onclick="clearDataCache()"><i data-lucide="x-circle"></i></button>`;
+  lucide.createIcons();
+}
+
+/* ============================================================
+   RESULTADO EFECTIVO: archivo + eventos MP del usuario
+   ============================================================ */
+function effectiveRegRes(e){
+  const out = e.regRes.slice();
+  const userMonths = new Set();
+  const byMonth = {};
+  (state.eventos[e.key] || []).forEach(ev => {
+    if (ev.tipo !== 'mp' || !ev.fecha || !ev.resultado) return;
+    const m = parseInt(ev.fecha.slice(5,7),10) - 1;
+    if (m < 0 || m > 11) return;
+    if (!byMonth[m] || ev.fecha > byMonth[m].fecha) byMonth[m] = ev;
+  });
+  Object.entries(byMonth).forEach(([m, ev]) => {
+    out[+m] = ev.resultado;
+    userMonths.add(+m);
+  });
+  return { results: out, userMonths };
 }
 
 /* ============================================================
@@ -585,10 +645,12 @@ function updateRegistro(){
     rows: filt, rowHeight: 30, colCount: 8 + 24,
     headHtml: regHead(),
     renderRow: (e)=>{
+      const { results, userMonths } = effectiveRegRes(e);
       const months = [];
       for (let m=0; m<12; m++){
         months.push(`<td style="text-align:center;">${codeBadge(e.regProg[m])}</td>`);
-        months.push(`<td style="text-align:center;">${resBadge(e.regRes[m])}</td>`);
+        const mark = userMonths.has(m) ? '<span title="Registrado en la app" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#2563eb;margin-right:3px;vertical-align:middle;"></span>' : '';
+        months.push(`<td style="text-align:center;">${mark}${resBadge(results[m])}</td>`);
       }
       return [
         `<td class="sticky-col" style="left:0;">${val(e.id)}</td>`,
@@ -722,6 +784,17 @@ function togglePendiente(key, pid){
    ============================================================ */
 function renderVerificacion(){
   const v = state.verif; if (!v) return;
+  // Recalcular resCounts incluyendo eventos del usuario
+  const resCounts = {};
+  state.equipos.forEach(eq=>{
+    const { results } = effectiveRegRes(eq);
+    results.forEach((val,m)=>{
+      if (!val) return;
+      if (!resCounts[val]) resCounts[val] = Array(12).fill(0);
+      resCounts[val][m]++;
+    });
+  });
+  v.resCounts = resCounts;
   const root = document.getElementById('view-verificacion');
   const famKeysOrder = ['Monitores','Ventiladores','Desfibriladores','M Anestesia','Incubadoras','Máquina de Diálisis'];
   const fam = v.familias;
@@ -873,7 +946,7 @@ function renderEquipoModal(){
                 <thead><tr><th></th>${MONTHS.map(m=>`<th style="text-align:center;">${m}</th>`).join('')}</tr></thead>
                 <tbody>
                   <tr><td class="font-medium">Programación</td>${e.pmpMeses.map(c=>`<td style="text-align:center;">${codeBadge(c)}</td>`).join('')}</tr>
-                  <tr><td class="font-medium">Resultado</td>${e.regRes.map(c=>`<td style="text-align:center;">${resBadge(c)}</td>`).join('')}</tr>
+                  <tr><td class="font-medium">Resultado</td>${(()=>{ const {results,userMonths}=effectiveRegRes(e); return results.map((c,m)=>{ const mark = userMonths.has(m) ? '<span title="Registrado en la app" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#2563eb;margin-right:3px;vertical-align:middle;"></span>' : ''; return `<td style="text-align:center;">${mark}${resBadge(c)}</td>`; }).join(''); })()}</tr>
                 </tbody>
               </table>
               ${e.regObs?`<div class="text-xs text-slate-600 mt-2"><b>Observación archivo:</b> ${escapeHtml(e.regObs)}</div>`:''}
@@ -898,13 +971,44 @@ function renderEquipoModal(){
             <div class="p-3 space-y-2">
               ${pends.length ? pends.map(p=>{
                 const venc = p.fechaCompromiso && p.fechaCompromiso < todayISO() && p.estado==='abierto';
-                return `<div class="flex items-start gap-2 border rounded p-2 ${venc?'border-red-300 bg-red-50':'border-slate-200'}">
-                  <input type="checkbox" ${p.estado==='cerrado'?'checked':''} onchange="togglePendiente('${e.key}','${p.id}')" class="mt-1" />
-                  <div class="flex-1">
-                    <div class="text-sm ${p.estado==='cerrado'?'line-through text-slate-500':''}">${escapeHtml(p.descripcion)}</div>
-                    <div class="text-xs text-slate-500">Creado ${fmtDateInput(p.fecha)} · Compromiso ${p.fechaCompromiso?fmtDateInput(p.fechaCompromiso):'—'} · Ejecutor ${escapeHtml(p.ejecutor||'—')} ${venc?'· <span class="text-red-600 font-medium">Vencido</span>':''}</div>
+                const tareas = p.tareas || [];
+                const acts = p.actualizaciones || [];
+                const tareasOpen = tareas.filter(t=>t.estado==='abierto').length;
+                return `<div class="border rounded ${venc?'border-red-300 bg-red-50':'border-slate-200 bg-white'}">
+                  <div class="flex items-start gap-2 p-2">
+                    <input type="checkbox" ${p.estado==='cerrado'?'checked':''} onchange="togglePendiente('${e.key}','${p.id}')" class="mt-1" />
+                    <div class="flex-1">
+                      <div class="text-sm ${p.estado==='cerrado'?'line-through text-slate-500':''}">${escapeHtml(p.descripcion)}</div>
+                      <div class="text-xs text-slate-500">Creado ${fmtDateInput(p.fecha)} · Compromiso ${p.fechaCompromiso?fmtDateInput(p.fechaCompromiso):'—'} · Ejecutor ${escapeHtml(p.ejecutor||'—')} ${venc?'· <span class="text-red-600 font-medium">Vencido</span>':''}</div>
+                    </div>
+                    <button class="text-slate-400 hover:text-red-600" onclick="deletePendiente('${e.key}','${p.id}')" title="Eliminar pendiente"><i data-lucide="trash-2"></i></button>
                   </div>
-                  <button class="text-slate-400 hover:text-red-600" onclick="deletePendiente('${e.key}','${p.id}')"><i data-lucide="trash-2"></i></button>
+                  <div class="px-2 pb-2 border-t border-slate-100 grid md:grid-cols-2 gap-3 mt-1 pt-2">
+                    <div>
+                      <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs font-medium text-slate-600">Tareas (${tareasOpen}/${tareas.length})</span>
+                        <button class="text-xs text-blue-700 hover:underline" onclick="addTarea('${e.key}','${p.id}')"><i data-lucide="plus"></i> Tarea</button>
+                      </div>
+                      ${tareas.length ? `<ul class="space-y-1">${tareas.map(t=>`
+                        <li class="flex items-start gap-2 text-xs">
+                          <input type="checkbox" ${t.estado==='cerrado'?'checked':''} onchange="toggleTarea('${e.key}','${p.id}','${t.id}')" class="mt-0.5" />
+                          <span class="flex-1 ${t.estado==='cerrado'?'line-through text-slate-400':'text-slate-700'}">${escapeHtml(t.descripcion)}</span>
+                          <button class="text-slate-400 hover:text-red-600" onclick="deleteTarea('${e.key}','${p.id}','${t.id}')"><i data-lucide="x"></i></button>
+                        </li>`).join('')}</ul>` : '<div class="text-xs text-slate-400 italic">Sin tareas.</div>'}
+                    </div>
+                    <div>
+                      <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs font-medium text-slate-600">Actualizaciones (${acts.length})</span>
+                        <button class="text-xs text-blue-700 hover:underline" onclick="addActualizacion('${e.key}','${p.id}')"><i data-lucide="plus"></i> Actualización</button>
+                      </div>
+                      ${acts.length ? `<ul class="space-y-1">${acts.slice().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')).map(a=>`
+                        <li class="text-xs border-l-2 border-blue-300 pl-2">
+                          <div class="flex justify-between"><span class="text-slate-500">${fmtDateInput(a.fecha)}</span>
+                          <button class="text-slate-400 hover:text-red-600" onclick="deleteActualizacion('${e.key}','${p.id}','${a.id}')"><i data-lucide="x"></i></button></div>
+                          <div class="text-slate-700 whitespace-pre-wrap">${escapeHtml(a.texto)}</div>
+                        </li>`).join('')}</ul>` : '<div class="text-xs text-slate-400 italic">Sin actualizaciones.</div>'}
+                    </div>
+                  </div>
                 </div>`;
               }).join('') : '<div class="text-sm text-slate-500 italic">Sin pendientes.</div>'}
             </div>
@@ -914,6 +1018,42 @@ function renderEquipoModal(){
     </div>`;
   document.getElementById('modals').innerHTML = html;
   lucide.createIcons();
+}
+
+function findPendiente(key, pid){
+  return (state.pendientes[key]||[]).find(p=>p.id===pid);
+}
+function addTarea(key, pid){
+  const desc = prompt('Descripción de la tarea:');
+  if (!desc || !desc.trim()) return;
+  const p = findPendiente(key, pid); if (!p) return;
+  p.tareas = p.tareas || [];
+  p.tareas.push({ id: uid(), descripcion: desc.trim(), estado: 'abierto', fecha: todayISO() });
+  savePersisted(); renderEquipoModal();
+}
+function toggleTarea(key, pid, tid){
+  const p = findPendiente(key, pid); if (!p) return;
+  const t = (p.tareas||[]).find(x=>x.id===tid); if (!t) return;
+  t.estado = t.estado === 'abierto' ? 'cerrado' : 'abierto';
+  savePersisted(); renderEquipoModal();
+}
+function deleteTarea(key, pid, tid){
+  const p = findPendiente(key, pid); if (!p) return;
+  p.tareas = (p.tareas||[]).filter(x=>x.id!==tid);
+  savePersisted(); renderEquipoModal();
+}
+function addActualizacion(key, pid){
+  const texto = prompt('Actualización:');
+  if (!texto || !texto.trim()) return;
+  const p = findPendiente(key, pid); if (!p) return;
+  p.actualizaciones = p.actualizaciones || [];
+  p.actualizaciones.push({ id: uid(), fecha: todayISO(), texto: texto.trim() });
+  savePersisted(); renderEquipoModal();
+}
+function deleteActualizacion(key, pid, aid){
+  const p = findPendiente(key, pid); if (!p) return;
+  p.actualizaciones = (p.actualizaciones||[]).filter(x=>x.id!==aid);
+  savePersisted(); renderEquipoModal();
 }
 
 function deleteEvento(key, id){
@@ -1030,7 +1170,12 @@ function saveEvento(key){
   state.eventos[key].push(ev);
   savePersisted();
   closeForm();
-  toast('Registro guardado');
+  if (ev.tipo === 'mp' && ev.fecha && ev.resultado){
+    const mes = MONTHS_FULL[parseInt(ev.fecha.slice(5,7),10)-1] || '';
+    toast(`Registro MP guardado en ${mes}`);
+  } else {
+    toast('Registro guardado');
+  }
   if (openEquipoKey === key) renderEquipoModal();
 }
 
@@ -1070,7 +1215,9 @@ function savePendiente(key){
     fecha: document.getElementById('p-fecha').value,
     fechaCompromiso: document.getElementById('p-comp').value || null,
     ejecutor: document.getElementById('p-ejec').value || null,
-    estado: 'abierto'
+    estado: 'abierto',
+    tareas: [],
+    actualizaciones: []
   };
   if (!p.descripcion){ toast('La descripción es obligatoria','err'); return; }
   state.pendientes[key] = state.pendientes[key] || [];
@@ -1091,6 +1238,55 @@ function closeForm(){
 /* ============================================================
    EXPORT / IMPORT JSON
    ============================================================ */
+function exportXLSX(){
+  if (!state.loaded){ toast('Cargue primero el archivo maestro','err'); return; }
+  const wb = XLSX.utils.book_new();
+  // Hoja 1: Registro_MP-2026 (con resultados del usuario fusionados)
+  const idHeader = ['ID','N° Carpeta','N° Inventario','Equipo','Servicio','Unidad','Ubicación','Procedencia','Marca','Modelo','Serie','Año Instalación','Vida Útil Residual','Clasificación','ENU/Baja','Frecuencia MP'];
+  const monthsHeader = [];
+  MONTHS.forEach(m=>{ monthsHeader.push(m+' P'); monthsHeader.push(m+' R'); });
+  const regRows = [[...idHeader, ...monthsHeader, 'Observación']];
+  state.equipos.forEach(e=>{
+    const { results } = effectiveRegRes(e);
+    const row = [e.id, e.carpeta, e.inv, e.equipo, e.servicio, e.unidad, e.ubicacion, e.procedencia, e.marca, e.modelo, e.serie, e.anio, e.vur, e.clas, e.enuBaja, e.frecuencia];
+    for (let m=0; m<12; m++){ row.push(e.regProg[m]||''); row.push(results[m]||''); }
+    row.push(e.regObs||'');
+    regRows.push(row);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(regRows), 'Registro_MP-2026');
+
+  // Hoja 2: Eventos
+  const evRows = [['N° Inventario','Equipo','Servicio','Tipo','Fecha','Resultado','Ejecutor','Estado','N° envío','Empresa','Folio','Folio guía','Observación / Comentario']];
+  Object.entries(state.eventos).forEach(([key, arr])=>{
+    const eq = state.equipos.find(x=>x.key===key);
+    arr.forEach(ev=>{
+      evRows.push([
+        eq?.inv||'', eq?.equipo||'', eq?.servicio||'',
+        TIPOS_EVENTO[ev.tipo]?.label || ev.tipo,
+        ev.fecha||'', ev.resultado||'', ev.ejecutor||'', ev.estado||'',
+        ev.nEnvio||'', ev.empresa||'', ev.folio||'', ev.folioGuia||'',
+        ev.observacion || ev.comentario || ''
+      ]);
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(evRows), 'Eventos');
+
+  // Hoja 3: Pendientes
+  const pRows = [['N° Inventario','Equipo','Servicio','Fecha creación','Fecha compromiso','Ejecutor','Estado','Descripción','Tareas','Actualizaciones']];
+  Object.entries(state.pendientes).forEach(([key, arr])=>{
+    const eq = state.equipos.find(x=>x.key===key);
+    arr.forEach(p=>{
+      const tareas = (p.tareas||[]).map(t=>`[${t.estado==='cerrado'?'x':' '}] ${t.descripcion}`).join('\n');
+      const acts = (p.actualizaciones||[]).map(a=>`${a.fecha}: ${a.texto}`).join('\n');
+      pRows.push([eq?.inv||'', eq?.equipo||'', eq?.servicio||'', p.fecha, p.fechaCompromiso||'', p.ejecutor||'', p.estado, p.descripcion, tareas, acts]);
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pRows), 'Pendientes');
+
+  XLSX.writeFile(wb, `MP_2026_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('Excel exportado');
+}
+
 function exportJSON(){
   const data = { version: 1, exportedAt: new Date().toISOString(), eventos: state.eventos, pendientes: state.pendientes };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
@@ -1122,6 +1318,12 @@ document.getElementById('json-input').addEventListener('change', async (e)=>{
    INIT
    ============================================================ */
 loadPersisted();
+if (loadData()){
+  document.getElementById('no-data').classList.add('hidden');
+  updateCounter();
+  selectView('pmp');
+  toast('Datos restaurados desde caché');
+}
 lucide.createIcons();
 </script>
 </body>
